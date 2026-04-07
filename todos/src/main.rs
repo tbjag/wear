@@ -1,33 +1,31 @@
-use std::{env, fs};
-use std::fs::{File, OpenOptions};
+use std::{env, usize};
+use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
+use anyhow::Result;
 
-const TASK_FILEPATH: &'static str = "tasks.txt";
+const TASK_FILEPATH: &str = "tasks.txt";
 
-fn add_tasks(task: Vec<String>) {
+fn add_tasks(task: &[String]) -> Result<()> {
     let mut file = OpenOptions::new()
         .append(true)
         .create(true)
-        .open(TASK_FILEPATH)
-        .expect("failed opening file");
-    
-    
-    let task = task.join(" ");
-    writeln!(file,"☐ {}", task).expect("failed writing file");
+        .open(TASK_FILEPATH)?;
 
-    println!("Finished adding task")
+    let task = task.join(" ");
+    writeln!(file, "☐ {}", task)?;
+
+    println!("Finished adding task");
+    Ok(())
 }
 
+fn complete_tasks(task_numbers: &[String]) -> Result<()>{
+    let conv: Vec<usize> = task_numbers
+        .iter()
+        .map(|x| x.parse::<usize>().map_err(anyhow::Error::from))
+        .collect::<Result<Vec<_>>>()?;
 
-fn complete_tasks(task_numbers: Vec<String>) {
-    let mut conv: Vec<usize> = vec![];
-    for task_number in task_numbers {
-        let task_number: usize = task_number.parse().expect("Not a valid number");
-        conv.push(task_number);
-    }
-    
-    let content = fs::read_to_string(TASK_FILEPATH).expect("could not read file");
-    
+    let content = fs::read_to_string(TASK_FILEPATH)?;
+
     let new_lines: Vec<String> = content
         .lines()
         .enumerate()
@@ -39,31 +37,42 @@ fn complete_tasks(task_numbers: Vec<String>) {
             }
         })
         .collect();
-    
-    let output = new_lines.join("\n");
-    fs::write(TASK_FILEPATH, output).expect("could not write to file");
+
+    let output = new_lines.join("\n") + "\n";
+    fs::write(TASK_FILEPATH, output)?;
+    Ok(())
 }
 
-fn list_tasks() {
-    let file = File::open(TASK_FILEPATH).expect("msg");
+fn list_tasks() -> Result<()>{
+    let file = File::open(TASK_FILEPATH)?;
     let reader = BufReader::new(file);
-    
-    for (index, line) in reader.lines().enumerate(){
-        println!("{}. {}", index, line.expect("blah"));
+
+    for (index, line) in reader.lines().enumerate() {
+        let line = line?;
+        println!("{}. {}", index, line);
     }
+    Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
-    
-    if args.len() > 1 {
-        match args[0].as_str() {
-            "add" => add_tasks(args[1..].to_vec()),
-            "done" => complete_tasks(args[1..].to_vec()),
-            _ => println!("not")
-        }
-        list_tasks();
+
+    if args.is_empty() {
+        list_tasks()?;
     } else {
-        list_tasks();
+        match args[0].as_str() {
+            "add" if args.len() > 1 => {
+                add_tasks(&args[1..])?;
+                list_tasks()?;
+            }
+            "done" if args.len() > 1 => {
+                complete_tasks(&args[1..])?;
+                list_tasks()?;
+            }
+            "add" | "done" => eprintln!("missing arguments"),
+            _ => eprintln!("option not available"),
+        }
     }
+    
+    Ok(())
 }
