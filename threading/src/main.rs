@@ -1,9 +1,25 @@
+use std::io::Error;
 use std::thread::{self, JoinHandle};
 use std::sync::mpsc::channel;
-
+use clap::{Parser, ValueEnum};
 use std::{collections::HashMap, fs::File, io::{BufRead, BufReader}};
 use std::sync::Arc;
 use regex::Regex;
+use std::path::PathBuf;
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum Format {
+    Csv,
+    Text,
+}
+
+#[derive(Parser)]
+struct Cli {
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+    #[arg(long, default_value = "dnf5.log")]
+    file: PathBuf,
+}
 
 #[derive(Debug)]
 enum AppError {
@@ -91,18 +107,15 @@ fn count_level(chunk: &[String], re: &Regex, map: &mut HashMap<String, u32>) {
 
 
 fn main() -> Result<(), AppError>{
-    let filepath = "dnf5.log";
-    let f = File::open(filepath)?;
+    let args = Cli::parse();
+
+    let f = File::open(&args.file)?;
     let reader = BufReader::new(f);
 
     let re = Arc::new(Regex::new(r"^(?P<timestamp>\S+)\s+\[(?P<pid>\d+)\]\s+(?P<level>[A-Z]+)\s+(?P<message>.*)$")?);
     let mut log_counter: HashMap<String, u32> = HashMap::new();
 
-    // read all lines into vec string
-    let mut lines: Vec<String> = vec![];
-    for line in reader.lines() {
-        lines.push(line?);
-    }
+    let lines: Vec<String> = reader.lines().collect::<Result<Vec<String>, std::io::Error>>()?;
 
     // num threads & chunks
     let num_threads = 2;
@@ -138,8 +151,10 @@ fn main() -> Result<(), AppError>{
         thread.join().expect("The thread has panicked closing");
     }
 
-
-    print_report(CsvReport{file_name: String::from("filename.csv")}, &log_counter);
+    match args.format {
+        Format::Csv => print_report(CsvReport{file_name: String::from("filename.csv")}, &log_counter),
+        Format::Text => print_report(PlainTextReport{}, &log_counter),
+    }
     
     Ok(())
 }
