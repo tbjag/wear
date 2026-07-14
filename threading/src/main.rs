@@ -6,6 +6,7 @@ use std::{collections::HashMap, fs::File, io::{BufRead, BufReader}};
 use std::sync::Arc;
 use regex::Regex;
 use std::path::PathBuf;
+use itertools::Itertools;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
@@ -58,13 +59,9 @@ struct PlainTextReport {
 
 impl Report for PlainTextReport {
     fn generate(&self, map: &HashMap<String, u32>) -> String {
-        let mut output = String::new();
-        let mut keys: Vec<&String> = map.keys().collect();
-        keys.sort();
-        for key in keys {
-            output += &format!("{}: {}\n", key, map[key]);
-        }
-        output
+        map.keys().sorted().map(
+            |key| format!("{}: {}\n", key, map[key])
+        ).collect::<String>()
     }
 }
 
