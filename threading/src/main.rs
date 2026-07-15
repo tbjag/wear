@@ -1,4 +1,4 @@
-use std::io::Error;
+
 use std::thread::{self, JoinHandle};
 use std::sync::mpsc::channel;
 use clap::{Parser, ValueEnum};
@@ -6,7 +6,11 @@ use std::{collections::HashMap, fs::File, io::{BufRead, BufReader}};
 use std::sync::Arc;
 use regex::Regex;
 use std::path::PathBuf;
-use itertools::Itertools;
+
+
+mod errors;
+mod report;
+mod parser;
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
@@ -22,95 +26,13 @@ struct Cli {
     file: PathBuf,
 }
 
-#[derive(Debug)]
-enum AppError {
-    IOError(std::io::Error),
-    ReError(regex::Error)
-}
-
-impl From<std::io::Error> for AppError {
-    fn from(e: std::io::Error) -> Self {
-        AppError::IOError(e)
-    }
-}
-
-impl From<regex::Error> for AppError {
-    fn from(e: regex::Error) -> Self {
-        AppError::ReError(e)
-    }
-}
-
-impl std::fmt::Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            AppError::IOError(err) => write!(f, "IO Error: {}", err),
-            AppError::ReError(err) => write!(f, "Regex Error: {}", err),
-        }
-    }
-}
-
-
-trait Report {
-    fn generate(&self, map: &HashMap<String, u32>) -> String;
-}
-
-struct PlainTextReport {
-}
-
-impl Report for PlainTextReport {
-    fn generate(&self, map: &HashMap<String, u32>) -> String {
-        map.keys().sorted().map(
-            |key| format!("{}: {}\n", key, map[key])
-        ).collect::<String>()
-    }
-}
-
-struct CsvReport {
-    file_name: String
-}
-
-impl Report for CsvReport {
-    fn generate(&self, map: &HashMap<String, u32>) -> String {
-        let mut output = String::from("level,count\n");
-        let mut keys: Vec<&String> = map.keys().collect();
-        keys.sort();
-        for key in keys {
-            output += &format!("{},{}\n", key, map[key]);
-        }
-        output
-    }
-}
-
-fn print_report(reporter: impl Report, map: &HashMap<String, u32>) {
-    println!("{}", reporter.generate(&map));
-}
-
-fn parse_log(raw_log: &str, re: &Regex) -> Option<String> {
-    if let Some(caps) = re.captures(raw_log) {
-        Some(String::from(&caps["level"]))
-    } else{
-        None
-    }
-    
-}
-
-fn count_level(chunk: &[String], re: &Regex, map: &mut HashMap<String, u32>) {
-    for line in chunk {
-        if let Some(log_level) = parse_log(line, re) {
-            *map.entry(log_level).or_insert(0) += 1;
-        }
-    }
-}
-
-
-fn main() -> Result<(), AppError>{
+fn main() -> Result<(), errors::AppError>{
     let args = Cli::parse();
 
     let f = File::open(&args.file)?;
     let reader = BufReader::new(f);
 
     let re = Arc::new(Regex::new(r"^(?P<timestamp>\S+)\s+\[(?P<pid>\d+)\]\s+(?P<level>[A-Z]+)\s+(?P<message>.*)$")?);
-    let mut log_counter: HashMap<String, u32> = HashMap::new();
 
     let lines: Vec<String> = reader.lines().collect::<Result<Vec<String>, std::io::Error>>()?;
 
@@ -131,26 +53,27 @@ fn main() -> Result<(), AppError>{
         let thread = thread::spawn(move || {
             let mut hash : HashMap<String, u32> = HashMap::new();
             let start_idx = thread_idx * chunk_size;
-            count_level(&lines_copy[start_idx .. start_idx + chunk_size], &re_copy, &mut hash);
+            parser::count_level(&lines_copy[start_idx .. start_idx + chunk_size], &re_copy, &mut hash);
             tx_copy.send(hash).expect("Unable to send on channel");
         });
         threads.push(thread);
     }
 
-    for _thread_idx in 0..num_threads {
+    let log_counter: HashMap<String, u32> = (0..num_threads).fold(HashMap::new(), |mut acc, _| {
         let received_map = rx.recv().expect("Unable to receive from channel");
-        for (log_message, count) in received_map {
-            *log_counter.entry(log_message).or_insert(0) += count;
-        }
-    }
+        received_map.into_iter().for_each(|(log_message, count)| {
+            *acc.entry(log_message.to_string()).or_insert(0) += count;
+        });
+        acc
+    });
 
     for thread in threads {
         thread.join().expect("The thread has panicked closing");
     }
 
     match args.format {
-        Format::Csv => print_report(CsvReport{file_name: String::from("filename.csv")}, &log_counter),
-        Format::Text => print_report(PlainTextReport{}, &log_counter),
+        Format::Csv => report::print_report(report::CsvReport{file_name: String::from("filename.csv")}, &log_counter),
+        Format::Text => report::print_report(report::PlainTextReport{}, &log_counter),
     }
     
     Ok(())
