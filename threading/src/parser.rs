@@ -8,5 +8,5 @@ fn parse_log(raw_log: &str, re: &Regex) -> Option<String> {
 pub fn count_level(chunk: &[String], re: &Regex, map: &mut HashMap<String, u32>) {
     chunk.iter()
         .filter_map(|line| parse_log(line, re))
-        .for_each(|log_level| *map.entry(log_level).or_insert(0) += 1)
+        .for_each(|log_level| *map.entry(log_level).or_insert(0) += 1);
 }

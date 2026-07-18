@@ -45,7 +45,7 @@ impl Report for CsvReport {
 
 pub fn print_report(reporter: &impl Report, map: &HashMap<String, u32>) {
     if let Ok(report) = reporter.generate(map) {
-        println!("{}", report);
+        println!("{report}");
     }
     
 }

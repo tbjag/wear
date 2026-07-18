@@ -61,7 +61,7 @@ fn main() -> Result<(), errors::AppError>{
 
     let log_counter: HashMap<String, u32> = (0..num_threads).fold(HashMap::new(), |mut acc, _| {
         let received_map = rx.recv().expect("Unable to receive from channel");
-        for (log_message, count) in received_map.into_iter() {
+        for (log_message, count) in received_map {
             *acc.entry(log_message.clone()).or_insert(0) += count;
         }
         acc
