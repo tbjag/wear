@@ -19,8 +19,8 @@ impl From<regex::Error> for AppError {
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AppError::IOError(err) => write!(f, "IO Error: {}", err),
-            AppError::ReError(err) => write!(f, "Regex Error: {}", err),
+            AppError::IOError(err) => write!(f, "IO Error: {err}"),
+            AppError::ReError(err) => write!(f, "Regex Error: {err}"),
         }
     }
 }

@@ -61,9 +61,9 @@ fn main() -> Result<(), errors::AppError>{
 
     let log_counter: HashMap<String, u32> = (0..num_threads).fold(HashMap::new(), |mut acc, _| {
         let received_map = rx.recv().expect("Unable to receive from channel");
-        received_map.into_iter().for_each(|(log_message, count)| {
-            *acc.entry(log_message.to_string()).or_insert(0) += count;
-        });
+        for (log_message, count) in received_map.into_iter() {
+            *acc.entry(log_message.clone()).or_insert(0) += count;
+        }
         acc
     });
 
@@ -72,8 +72,8 @@ fn main() -> Result<(), errors::AppError>{
     }
 
     match args.format {
-        Format::Csv => report::print_report(report::CsvReport{file_name: String::from("filename.csv")}, &log_counter),
-        Format::Text => report::print_report(report::PlainTextReport{}, &log_counter),
+        Format::Csv => report::print_report(&report::CsvReport{file_name: String::from("filename.csv")}, &log_counter),
+        Format::Text => report::print_report(&report::PlainTextReport{}, &log_counter),
     }
     
     Ok(())
