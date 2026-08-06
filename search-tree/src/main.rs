@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Tree {
     Node(i32, Box<Tree>, Box<Tree>),
     Empty,
@@ -69,6 +69,38 @@ impl Tree {
             }
         }
     }
+
+    fn delete(&mut self, n:i32) -> bool {
+        match self {
+            Tree::Empty => false,
+            Tree::Node(val, left, right) => {
+                if *val == n {
+                    match (&**left, &**right) {
+                        (Tree::Empty, Tree::Empty) => { 
+                            *self = Tree::Empty;
+                        }
+                        (Tree::Empty, _) => { 
+                            let surviving_subtree = std::mem::replace(right, Box::new(Tree::Empty));
+                            *self = *surviving_subtree;
+                        }
+                        (_, Tree::Empty) => { 
+                            let surviving_subtree = std::mem::replace(left, Box::new(Tree::Empty));
+                            *self = *surviving_subtree;
+                        }
+                        (Tree::Node(left_val, left_left, left_right), Tree::Node(right_val, right_left, right_right)) => { 
+                            todo!()
+                        }
+                        _ => { unreachable!() }
+                    }
+                    true
+                } else if *val > n {
+                    left.delete(n)
+                } else {
+                    right.delete(n)
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -95,4 +127,10 @@ fn main() {
 
     let found = t.contains(45);
     println!("contains 45: {found}");
+
+    let delete = t.delete(300);
+    println!("deleted n: {delete}");
+
+    let in_order = t.traverse_in_order();
+    println!("in order: {in_order:?}");
 }
