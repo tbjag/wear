@@ -70,6 +70,18 @@ impl Tree {
         }
     }
 
+    fn find_smallest(&self) -> i32 {
+        match self {
+            Tree::Empty => { unreachable!() }
+            Tree::Node(val, left, _) => {
+                match &**left {
+                    Tree::Empty => *val,
+                    _ => left.find_smallest()
+                }
+            }
+        }
+    }
+
     fn delete(&mut self, n:i32) -> bool {
         match self {
             Tree::Empty => false,
@@ -87,10 +99,10 @@ impl Tree {
                             let surviving_subtree = std::mem::replace(left, Box::new(Tree::Empty));
                             *self = *surviving_subtree;
                         }
-                        (Tree::Node(left_val, left_left, left_right), Tree::Node(right_val, right_left, right_right)) => { 
-                            todo!()
+                        (Tree::Node(_, _, _), Tree::Node(_, _, _)) => { 
+                            *val = right.find_smallest();
+                            right.delete(*val);
                         }
-                        _ => { unreachable!() }
                     }
                     true
                 } else if *val > n {
@@ -105,32 +117,16 @@ impl Tree {
 
 fn main() {
     let mut t = Tree::Empty;
-    t.insert(100);
-    t.insert(20);
-    t.insert(200);
-    t.insert(10);
-    t.insert(30);
-    t.insert(150);
-    t.insert(300);
+    t.insert(5);
+    t.insert(4);
+    t.insert(6);
 
     let in_order = t.traverse_in_order();
     println!("in order: {in_order:?}");
 
-    let pre_order = t.traverse_pre_order();
-    println!("pre order: {pre_order:?}");
-
-    let post_order = t.traverse_post_order();
-    println!("post order: {post_order:?}");
-
-    let found = t.contains(30);
-    println!("contains 30: {found}");
-
-    let found = t.contains(45);
-    println!("contains 45: {found}");
-
-    let delete = t.delete(300);
-    println!("deleted n: {delete}");
+    t.delete(5);
 
     let in_order = t.traverse_in_order();
     println!("in order: {in_order:?}");
+    println!("{t:#?}");
 }
