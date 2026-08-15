@@ -6,40 +6,60 @@ import (
 	"regexp"
 )
 
-type TokenType int
+type TokenType string
 
 const (
-	EOF TokenType = iota
-	Print
-	Put
-	While
-	If
-	Else
-	LeftParen
-	RightParen
-	StringLiteral
+	EOF           TokenType = "EOF"
+	Print         TokenType = "Print"
+	Put           TokenType = "Put"
+	While         TokenType = "While"
+	If            TokenType = "If"
+	Else          TokenType = "Else"
+	LeftParen     TokenType = "LeftParen"
+	RightParen    TokenType = "RightParen"
+	StringLiteral TokenType = "StringLiteral"
+	Semicolon     TokenType = "Semicolon"
 )
 
 type TokenMatch struct {
-	tokenType TokenType
+	tokenType TokenType // i think we add a function
+	regex     *regexp.Regexp
+}
+
+type TokenMatch2 struct {
+	tokenType TokenType // i think we add a function
+	size int
+	
 	regex     *regexp.Regexp
 }
 
 type Token struct {
-	tokenType TokenType
-	val     string
+	Type TokenType
+	Val  string
 }
 
 var TokenMatches = []TokenMatch{
 	{Print, regexp.MustCompile(`\bprint\b`)},
-	{Put,   regexp.MustCompile(`\bput\b`)},
-	{While,  regexp.MustCompile(`\bwhile\b`)},
+	{Put, regexp.MustCompile(`\bput\b`)},
+	{While, regexp.MustCompile(`\bwhile\b`)},
 	{StringLiteral, regexp.MustCompile(`"[^"\\]*(\\.[^"\\]*)*"`)},
 	{LeftParen, regexp.MustCompile(`\(`)},
 	{RightParen, regexp.MustCompile(`\)`)},
 	{If, regexp.MustCompile(`if`)},
+	{Else, regexp.MustCompile(`else`)},
+	{Semicolon, regexp.MustCompile(`;`)},
 }
 
+func clearWhitespace(reg *regexp.Regexp, idx int, s string) int {
+	loc := reg.FindStringIndex(s[idx:])
+	if len(loc) == 2 {
+		if loc[0] != 0 {
+			return idx
+		}
+		idx += loc[1]
+	}
+	return idx
+}
 
 func check(e error) {
 	if e != nil {
@@ -48,35 +68,45 @@ func check(e error) {
 }
 
 func main() {
-	content, err := os.ReadFile("tests/hello_world.txt")
+	fileContent, err := os.ReadFile("tests/hello_world.txt")
 	check(err)
+	rawData := string(fileContent)
+	rawDataLen := len(rawData)
 
-	data := string(content)
+	var idx int
+	var res []Token
+	whiteSpaceReg := regexp.MustCompile(`\s+`)
 
-	re := regexp.MustCompile(`\bprint\b`)
-	result := re.FindStringIndex(string(content))
-
-	fmt.Println("found print: ", result)
-
-	var res[]Token
-
+	// custom parse function for each struct in list?
+	// would be nice to declare (enum val, regex, size of token, parse logic?, parse order) 
+	// in one place
 	for {
-		// match on the first index 0
+		match := false
+		idx = clearWhitespace(whiteSpaceReg, idx, rawData)
 		for _, tokenMatch := range TokenMatches {
-			m := tokenMatch.regex.FindStringIndex(data)
-			if m != nil {
-				if m[0] != 0 {
+			loc := tokenMatch.regex.FindStringIndex(rawData[idx:])
+			if len(loc) == 2 {
+				if loc[0] != 0 {
 					continue
 				}
-				res = append(res, Token{tokenMatch.tokenType, ""})
+				idx += loc[1]
+				res = append(res, Token{tokenMatch.tokenType, ""}) // todo parse string
+				match = true
+				break
 			}
+		}
+
+		if !match {
+			panic("Could not parse: " + rawData[idx:])
+		}
+
+		if idx >= rawDataLen {
+			res = append(res, Token{EOF, ""})
 			break
 		}
-		// chop by size of string matched
-		// create token here
-		// if we dont find a match then we error
-		// keep chopping until EOF, append eof
-		break
 	}
-	fmt.Printf("%v", res)
+	for _, item := range res {
+		fmt.Printf("%+v\n", item)
+	}
+
 }
