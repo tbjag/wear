@@ -21,16 +21,27 @@ const (
 	Semicolon     TokenType = "Semicolon"
 )
 
+type ParseType int
+
+const (
+	Keyword ParseType = iota
+	String
+	Integer
+)
+
 type TokenMatch struct {
-	tokenType TokenType // i think we add a function
+	tokenType TokenType
+	parseType ParseType
 	regex     *regexp.Regexp
+	size      int
 }
 
-type TokenMatch2 struct {
-	tokenType TokenType // i think we add a function
-	size int
-	
-	regex     *regexp.Regexp
+func (t TokenMatch) ParseKeyword(data string, idx int) (int, bool) {
+	loc := t.regex.FindStringIndex(data[idx:])
+	if len(loc) != 2 || loc[0] != 0 {
+		return idx, false
+	}
+	return idx + loc[1], true
 }
 
 type Token struct {
@@ -39,15 +50,15 @@ type Token struct {
 }
 
 var TokenMatches = []TokenMatch{
-	{Print, regexp.MustCompile(`\bprint\b`)},
-	{Put, regexp.MustCompile(`\bput\b`)},
-	{While, regexp.MustCompile(`\bwhile\b`)},
-	{StringLiteral, regexp.MustCompile(`"[^"\\]*(\\.[^"\\]*)*"`)},
-	{LeftParen, regexp.MustCompile(`\(`)},
-	{RightParen, regexp.MustCompile(`\)`)},
-	{If, regexp.MustCompile(`if`)},
-	{Else, regexp.MustCompile(`else`)},
-	{Semicolon, regexp.MustCompile(`;`)},
+	{Print, Keyword, regexp.MustCompile(`\bprint\b`), 5},
+	// {Put, regexp.MustCompile(`\bput\b`)},
+	// {While, regexp.MustCompile(`\bwhile\b`)},
+	// {StringLiteral, String, regexp.MustCompile(`"[^"\\]*(\\.[^"\\]*)*"`), -1},
+	// {LeftParen, Keyword, regexp.MustCompile(`\(`), 1},
+	// {RightParen, Keyword, regexp.MustCompile(`\)`), 1},
+	// {If, regexp.MustCompile(`if`)},
+	// {Else, regexp.MustCompile(`else`)},
+	// {Semicolon, Keyword, regexp.MustCompile(`;`), 1},
 }
 
 func clearWhitespace(reg *regexp.Regexp, idx int, s string) int {
@@ -77,13 +88,15 @@ func main() {
 	var res []Token
 	whiteSpaceReg := regexp.MustCompile(`\s+`)
 
-	// custom parse function for each struct in list?
-	// would be nice to declare (enum val, regex, size of token, parse logic?, parse order) 
-	// in one place
 	for {
 		match := false
 		idx = clearWhitespace(whiteSpaceReg, idx, rawData)
 		for _, tokenMatch := range TokenMatches {
+			if tokenMatch.parseType == Keyword {
+				tokenMatch.ParseKeyword(rawData, idx)
+			}
+
+			
 			loc := tokenMatch.regex.FindStringIndex(rawData[idx:])
 			if len(loc) == 2 {
 				if loc[0] != 0 {
