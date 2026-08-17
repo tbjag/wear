@@ -30,18 +30,9 @@ const (
 )
 
 type TokenMatch struct {
-	tokenType TokenType
-	parseType ParseType
-	regex     *regexp.Regexp
-	size      int
-}
-
-func (t TokenMatch) ParseKeyword(data string, idx int) (int, bool) {
-	loc := t.regex.FindStringIndex(data[idx:])
-	if len(loc) != 2 || loc[0] != 0 {
-		return idx, false
-	}
-	return idx + loc[1], true
+	TokenType TokenType
+	Regex     *regexp.Regexp
+	Size      int
 }
 
 type Token struct {
@@ -49,27 +40,88 @@ type Token struct {
 	Val  string
 }
 
-var TokenMatches = []TokenMatch{
-	{Print, Keyword, regexp.MustCompile(`\bprint\b`), 5},
-	// {Put, regexp.MustCompile(`\bput\b`)},
-	// {While, regexp.MustCompile(`\bwhile\b`)},
-	// {StringLiteral, String, regexp.MustCompile(`"[^"\\]*(\\.[^"\\]*)*"`), -1},
-	// {LeftParen, Keyword, regexp.MustCompile(`\(`), 1},
-	// {RightParen, Keyword, regexp.MustCompile(`\)`), 1},
-	// {If, regexp.MustCompile(`if`)},
-	// {Else, regexp.MustCompile(`else`)},
-	// {Semicolon, Keyword, regexp.MustCompile(`;`), 1},
+func (t TokenMatch) ParseKeyword(data string, idx int) (int, Token, bool) {
+	loc := t.Regex.FindStringIndex(data[idx:])
+	token := Token{
+		Type: t.TokenType,
+		Val:  "",
+	}
+	if len(loc) != 2 || loc[0] != 0 {
+		return idx, token, false
+	}
+	return idx + loc[1], token, true
 }
 
-func clearWhitespace(reg *regexp.Regexp, idx int, s string) int {
-	loc := reg.FindStringIndex(s[idx:])
-	if len(loc) == 2 {
-		if loc[0] != 0 {
-			return idx
-		}
-		idx += loc[1]
+func (t TokenMatch) ParseVariable(data string, idx int) (int, Token, bool) {
+	loc := t.Regex.FindStringIndex(data[idx:])
+	token := Token{
+		Type: t.TokenType,
+		Val:  "",
 	}
-	return idx
+	if len(loc) != 2 || loc[0] != 0 {
+		return idx, token, false
+	}
+	token.Val = data[idx : idx+loc[1]]
+	return idx + loc[1], token, true
+}
+
+var JunkMatches = []*regexp.Regexp {
+	regexp.MustCompile(`\s+`),
+	//todo add comments
+}
+
+var KeywordTokenMatches = []TokenMatch{
+	{Print, regexp.MustCompile(`\bprint\b`), 5},
+	{Put, regexp.MustCompile(`\bput\b`), 3},
+	{While, regexp.MustCompile(`\bwhile\b`), 5},
+	{LeftParen, regexp.MustCompile(`\(`), 1},
+	{RightParen, regexp.MustCompile(`\)`), 1},
+	{If, regexp.MustCompile(`if`), 2},
+	{Else, regexp.MustCompile(`else`), 4},
+	{Semicolon, regexp.MustCompile(`;`), 1},
+}
+
+var VariableTokenMatches = []TokenMatch{
+	{StringLiteral, regexp.MustCompile(`"[^"\\]*(\\.[^"\\]*)*"`), -1},
+}
+
+func checkForKeyword(data string, idx int) (int, Token, bool) {
+	match := false
+	token := Token{}
+	for _, tm := range KeywordTokenMatches {
+		if _idx, _token, ok := tm.ParseKeyword(data, idx); ok {
+			match = true
+			idx = _idx
+			token = _token
+			break
+		}
+	}
+	return idx, token, match
+}
+
+func checkForVariable(data string, idx int) (int, Token, bool) {
+	match := false
+	token := Token{}
+	for _, tm := range VariableTokenMatches {
+		if _idx, _token, ok := tm.ParseVariable(data, idx); ok {
+			match = true
+			idx = _idx
+			token = _token
+			break
+		}
+	}
+	return idx, token, match
+}
+
+func eatJunk(data string, idx int) (int, bool) {
+	for _, jm := range JunkMatches {
+		loc := jm.FindStringIndex(data[idx:])
+		if len(loc) != 2 || loc[0] != 0 {
+			continue
+		}
+		return  idx + loc[1], true
+	}
+	return idx, false
 }
 
 func check(e error) {
@@ -86,37 +138,38 @@ func main() {
 
 	var idx int
 	var res []Token
-	whiteSpaceReg := regexp.MustCompile(`\s+`)
 
 	for {
 		match := false
-		idx = clearWhitespace(whiteSpaceReg, idx, rawData)
-		for _, tokenMatch := range TokenMatches {
-			if tokenMatch.parseType == Keyword {
-				tokenMatch.ParseKeyword(rawData, idx)
-			}
 
-			
-			loc := tokenMatch.regex.FindStringIndex(rawData[idx:])
-			if len(loc) == 2 {
-				if loc[0] != 0 {
-					continue
-				}
-				idx += loc[1]
-				res = append(res, Token{tokenMatch.tokenType, ""}) // todo parse string
-				match = true
-				break
-			}
+		if _idx, ok := eatJunk(rawData, idx); ok {
+			idx = _idx
+			continue
 		}
 
-		if !match {
-			panic("Could not parse: " + rawData[idx:])
+		if _idx, token, ok := checkForKeyword(rawData, idx); ok {
+			match = true
+			idx = _idx
+			res = append(res, token)
+			continue
+		}
+
+		if _idx, token, ok := checkForVariable(rawData, idx); ok {
+			match = true
+			idx = _idx
+			res = append(res, token)
+			continue
 		}
 
 		if idx >= rawDataLen {
 			res = append(res, Token{EOF, ""})
 			break
 		}
+
+		if !match {
+			panic("Could not parse: " + rawData[idx:])
+		}
+
 	}
 	for _, item := range res {
 		fmt.Printf("%+v\n", item)
