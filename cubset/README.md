@@ -1,3 +1,6 @@
 # todos
 
-- tokenize inputs - doesnt need to be perfect just get it done
+- finish adding all token types
+- move code into their own files
+- add tests
+- add cli commands to run specific
