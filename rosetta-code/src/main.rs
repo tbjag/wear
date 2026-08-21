@@ -1,6 +1,5 @@
-use std::sync::LazyLock;
-use regex::Regex;
 use std::fs;
+use std::io::Read;
 use std::process::ExitCode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,101 +48,65 @@ struct Token {
     value: Option<String>,
 }
 
-struct TokenMatch {
-    regex: LazyLock<Regex>,
-    parse: fn(&str) -> Option<Token>,
-}
-
-
-fn fixed_token(kind: TokenKind) -> Option<Token> {
-    Some(Token { token_kind: kind, value: None })
-}
-fn parse_print(_content: &str) -> Option<Token> { fixed_token(TokenKind::Print) }
-fn parse_put(_content: &str) -> Option<Token> { fixed_token(TokenKind::Put) }
-fn parse_while(_content: &str) -> Option<Token> { fixed_token(TokenKind::While) }
-fn parse_if(_content: &str) -> Option<Token> { fixed_token(TokenKind::If) }
-fn parse_else(_content: &str) -> Option<Token> { fixed_token(TokenKind::Else) }
-
-fn parse_left_paren(_content: &str) -> Option<Token> { fixed_token(TokenKind::LeftParen) }
-fn parse_right_paren(_content: &str) -> Option<Token> { fixed_token(TokenKind::RightParen) }
-fn parse_semicolon(_content: &str) -> Option<Token> { fixed_token(TokenKind::Semicolon) }
-fn parse_comma(_content: &str) -> Option<Token> { fixed_token(TokenKind::Comma) }
-
-fn parse_identifier(content: &str) -> Option<Token> {
-    Some(Token { token_kind: TokenKind::Identifier, value: Some(content.to_string()) })
-}
-fn parse_integer(content: &str) -> Option<Token> {
-    Some(Token { token_kind: TokenKind::Integer, value: Some(content.to_string()) })
-}
-fn parse_string(content: &str) -> Option<Token> {
-    Some(Token { token_kind: TokenKind::String, value: Some(content.to_string()) })
-}
-fn parse_character(content: &str) -> Option<Token> {
-    Some(Token { token_kind: TokenKind::Character, value: Some(content.to_string()) })
-}
-
-static TOKEN_MATCHES: LazyLock<[TokenMatch; 14]> = LazyLock::new(|| [
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"\s+").unwrap()), parse: parse_print },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^print\b").unwrap()), parse: parse_print },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^put\b").unwrap()), parse: parse_put },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^while\b").unwrap()), parse: parse_while },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^if\b").unwrap()), parse: parse_if },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^else\b").unwrap()), parse: parse_else },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^\(").unwrap()), parse: parse_left_paren },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^\)").unwrap()), parse: parse_right_paren },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^;").unwrap()), parse: parse_semicolon },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r"^,").unwrap()), parse: parse_comma },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r#"[_a-zA-Z][_a-zA-Z0-9]*"#).unwrap()), parse: parse_identifier },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r#"[0-9]+"#).unwrap()), parse: parse_integer },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r#""[^"\n]*""#).unwrap()), parse: parse_string },
-    TokenMatch { regex: LazyLock::new(|| Regex::new(r#"'([^'\n]|\\n|\\\\)'"#).unwrap()), parse: parse_character },
-]);
-
-fn lex(source: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut pos = 0;
-
-    while pos < source.len() {
-        let remaining = &source[pos..];
-
-        let ws_len = remaining.len() - remaining.trim_start().len();
-        if ws_len > 0 {
-            pos += ws_len;
-            continue;
-        }
-        let remaining = &source[pos..];
-
-        let mut matched = false;
-        for token_match in TOKEN_MATCHES.iter() {
-            if let Some(m) = token_match.regex.find(remaining) {
-                let text = &remaining[m.start()..m.end()];
-                tokens.push((token_match.parse)(text));
-                pos += m.end();
-                matched = true;
-                break;
-            }
-        }
-
-        if !matched {
-            panic!("unexpected character at position {pos}: {:?}", &remaining[..1]);
-        }
+fn peek(idx: usize, n: usize, content: &Vec<u8>) -> Option<String> {
+    if idx + n > content.len() {
+        None
+    } else {
+        let x = String::from_utf8(content[idx..n+idx].to_vec()).expect("failed to parse into string");
+        Some(x)
     }
+}
+
+fn consume(idx: usize, n: usize) -> usize {
+    idx + n
+}
+
+fn keyword_token(token_kind: TokenKind) -> Option<Token> {
+    let t = Token {
+        token_kind: token_kind,
+        value: None
+    };
+    return Some(t);
+}
+
+fn find_keyword(idx: usize, content: &Vec<u8>) -> Option<Token>{
+    let keywords = vec!["print", "while"];
     
-    tokens.push(Token { token_kind: TokenKind::EOF, value: None });
-    tokens
+    if let Some(content) = peek(idx, 5, content) {
+        match content.as_str() {
+            "print" => keyword_token(TokenKind::Print),
+            "while" => keyword_token(TokenKind::While),
+            _ => None
+        }
+    } else if let Some(content) = peek(idx, 4, content) { // this is OK - we need not return if we dont find a match or return and call the function on 4s etc/
+        match content.as_str() {
+            "else" => keyword_token(TokenKind::Else),
+            _ => None
+        }
+    } 
+    else {
+        None
+    }
 }
 
 fn main() -> ExitCode {
-    let file_path = "tests/variables.txt";
-    let content = match fs::read_to_string(file_path) {
-        Ok(content) => content,
-        Err(err) => {
-            eprintln!("ERROR: could not read file {file_path}: {err}");
-            return ExitCode::FAILURE;
+    let file_path = "tests/basic_hello_world.txt";
+    let content = fs::read_to_string(file_path).expect("failed to read file");
+    if !content.is_ascii() {
+        eprintln!("ERROR: file content not ascii");
+        return ExitCode::FAILURE;
+    }
+
+    let chars = content.into_bytes();
+    let mut pos = 0;
+    while pos < chars.len() {
+        if let Some(p) = find_keyword(pos, &chars){
+            println!("{:?}", p);
+            pos = consume(pos, 5);
         }
-    };
-    let l = lex(&content);
-    println!("{l:#?}");
+        
+        pos +=1;
+    }
     
     ExitCode::SUCCESS
 }
