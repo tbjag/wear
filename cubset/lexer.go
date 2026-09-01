@@ -149,7 +149,7 @@ func lex(content string) []Token {
 		}
 
 		if !match {
-			panic("Could not parse: " + content[idx:])
+			panic("Could not lex: " + content[idx:])
 		}
 
 	}

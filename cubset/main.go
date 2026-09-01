@@ -12,7 +12,12 @@ func check(e error) {
 }
 
 func main() {
-	fileContent, err := os.ReadFile("tests/hello_world.txt")
+	allArgs := os.Args
+	if len(allArgs) < 2 {
+		fmt.Printf("provide file to lex")
+		return
+	}
+	fileContent, err := os.ReadFile(allArgs[1])
 	check(err)
 	rawData := string(fileContent)
 
