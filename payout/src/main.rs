@@ -63,8 +63,28 @@ fn calc_net_owed(paid_in: HashMap<String, f32>) -> HashMap<String, f32> {
     paid_in
 }
 
+fn check_net_zero(l: Vec<(String, f32)>) -> bool {
+    todo!()
+} 
+
 fn greedy_min_cash_flow(net_paid_in: HashMap<String, f32>) {
-    
+    let mut debtors: Vec<(String, f32)> = net_paid_in
+        .iter()
+        .filter(|&(_, &net_amount)| net_amount < 0.0)
+        .map(|(name, &net_amount)| (name.clone(), -net_amount))
+        .collect();
+
+    debtors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    let mut creditors: Vec<(String, f32)> = net_paid_in
+        .iter()
+        .filter(|&(_, &net_amount)| net_amount > 0.0)
+        .map(|(name, &net_amount)| (name.clone(), net_amount))
+        .collect();
+
+    creditors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    while 
 }
 
 fn main() {
