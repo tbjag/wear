@@ -1,5 +1,7 @@
-use std::{collections::HashMap, io::{self, Write}};
-use std::cmp;
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
 // use clap::{Parser};
 
 // #[derive(Parser)]
@@ -11,14 +13,14 @@ use std::cmp;
 //     // count: u8
 // }
 
-fn get_amounts()-> HashMap<String, f32> {
+fn get_amounts() -> HashMap<String, f32> {
     let mut names: Vec<String> = Vec::new();
     println!("Enter all of the names of the party: (`hit enter` to continue)");
     io::stdout().flush().unwrap();
-    
+
     loop {
         let mut input = String::new();
-    
+
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
@@ -32,13 +34,12 @@ fn get_amounts()-> HashMap<String, f32> {
 
     let mut paid_in: HashMap<String, f32> = HashMap::new();
     println!("Enter expenses by person: (`next` to continue)");
-    
-    
+
     for person in names {
         print!("{person}: ");
         io::stdout().flush().unwrap();
         let mut input = String::new();
-    
+
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line");
@@ -46,10 +47,9 @@ fn get_amounts()-> HashMap<String, f32> {
         let amount = input.trim();
         let parsed_amount: f32 = amount.parse().expect("could not parse into usize");
         paid_in.insert(person.clone(), parsed_amount);
-
     }
     println!("{paid_in:?}");
-    return  paid_in;
+    return paid_in;
 }
 
 fn calc_net_owed(paid_in: HashMap<String, f32>) -> HashMap<String, f32> {
@@ -63,7 +63,6 @@ fn calc_net_owed(paid_in: HashMap<String, f32>) -> HashMap<String, f32> {
     println!("{net_paid_in:?}");
     net_paid_in
 }
-
 
 fn greedy_min_cash_flow(net_owed: HashMap<String, f32>) {
     let mut debtors: Vec<(String, f32)> = net_owed
@@ -84,7 +83,7 @@ fn greedy_min_cash_flow(net_owed: HashMap<String, f32>) {
 
     debtors.retain(|x| x.1 > 0.01);
     creditors.retain(|x| x.1 > 0.01);
-    
+
     while debtors.len() > 0 && creditors.len() > 0 {
         let biggest_creditor = creditors.get(0).expect("none found");
         let biggest_debtor = debtors.get(0).expect("none found");
@@ -118,8 +117,6 @@ fn main() {
     // how much each paid
 
     let paid_in = get_amounts();
-    let net_owed= calc_net_owed(paid_in);
+    let net_owed = calc_net_owed(paid_in);
     greedy_min_cash_flow(net_owed);
-    
-    
 }
