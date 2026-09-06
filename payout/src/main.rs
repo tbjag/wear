@@ -2,121 +2,50 @@ use std::{
     collections::HashMap,
     io::{self, Write},
 };
-// use clap::{Parser};
 
-// #[derive(Parser)]
-// #[command(name = "payout", version = "0.0")]
-// struct Cli {
-//     #[arg(long)]
-//     new: bool,
-//     // #[arg(short, long, default_value_t=1)]
-//     // count: u8
-// }
+use axum::{routing::post, routing::get, Json, Router};
+use serde::{Deserialize, Serialize};
 
-fn get_amounts() -> HashMap<String, f32> {
-    let mut names: Vec<String> = Vec::new();
-    println!("Enter all of the names of the party: (`hit enter` to continue)");
-    io::stdout().flush().unwrap();
-
-    loop {
-        let mut input = String::new();
-
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        let name = input.trim();
-        if name.is_empty() {
-            break;
-        }
-        names.push(name.to_string());
-    }
-
-    let mut paid_in: HashMap<String, f32> = HashMap::new();
-    println!("Enter expenses by person: (`next` to continue)");
-
-    for person in names {
-        print!("{person}: ");
-        io::stdout().flush().unwrap();
-        let mut input = String::new();
-
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        let amount = input.trim();
-        let parsed_amount: f32 = amount.parse().expect("could not parse into usize");
-        paid_in.insert(person.clone(), parsed_amount);
-    }
-    println!("{paid_in:?}");
-    return paid_in;
+#[derive(Deserialize)]
+struct CreateUserRequest {
+    username: String,
+    email: String,
 }
 
-fn calc_net_owed(paid_in: HashMap<String, f32>) -> HashMap<String, f32> {
-    let total_amount: f32 = paid_in.values().copied().sum();
-    let fair_share = total_amount / paid_in.len() as f32;
-    println!("fair_share: {fair_share}");
-    let net_paid_in: HashMap<String, f32> = paid_in
-        .iter()
-        .map(|(person, amount)| (person.clone(), amount - fair_share))
-        .collect();
-    println!("{net_paid_in:?}");
-    net_paid_in
+// 2. Define a shape for the JSON response (optional)
+#[derive(Serialize)]
+struct UserResponse {
+    id: u64,
+    username: String,
+    status: String,
 }
 
-fn greedy_min_cash_flow(net_owed: HashMap<String, f32>) {
-    let mut debtors: Vec<(String, f32)> = net_owed
-        .iter()
-        .filter(|&(_, &net_amount)| net_amount < 0.0)
-        .map(|(name, &net_amount)| (name.clone(), -net_amount))
-        .collect();
-
-    debtors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    let mut creditors: Vec<(String, f32)> = net_owed
-        .iter()
-        .filter(|&(_, &net_amount)| net_amount > 0.0)
-        .map(|(name, &net_amount)| (name.clone(), net_amount))
-        .collect();
-
-    creditors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    debtors.retain(|x| x.1 > 0.01);
-    creditors.retain(|x| x.1 > 0.01);
-
-    while debtors.len() > 0 && creditors.len() > 0 {
-        let biggest_creditor = creditors.get(0).expect("none found");
-        let biggest_debtor = debtors.get(0).expect("none found");
-
-        let debtor_pays = biggest_creditor.1.min(biggest_debtor.1);
-        let biggest_debtor = biggest_debtor.0.clone();
-        let biggest_creditor = biggest_creditor.0.clone();
-        println!("{biggest_debtor} pays {biggest_creditor} {debtor_pays}");
-
-        creditors[0].1 -= debtor_pays;
-        debtors[0].1 -= debtor_pays;
-
-        debtors.retain(|x| x.1 > 0.01);
-        creditors.retain(|x| x.1 > 0.01);
-
-        debtors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        creditors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    }
-
-    println!("DONE");
+async fn hello_world() -> &'static str {
+    "Hello, World!"
 }
 
-fn main() {
-    // let cli = Cli::parse();
-    // if cli.new {
-    //     println!("new")
-    // }
+async fn create_user(Json(payload): Json<CreateUserRequest>) -> Json<UserResponse> {
+    println!("Creating user {} with email {}", payload.username, payload.email);
 
-    // get stdin of:
-    // ppl
-    // how much each paid
+    // Return a JSON response back to the client
+    Json(UserResponse {
+        id: 1337,
+        username: payload.username,
+        status: "success".to_string(),
+    })
+}
 
-    let paid_in = get_amounts();
-    let net_owed = calc_net_owed(paid_in);
-    greedy_min_cash_flow(net_owed);
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .route("/", get(hello_world))
+        .route("/users", post(create_user));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+    println!("🚀 Listening on http://{}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
 }
