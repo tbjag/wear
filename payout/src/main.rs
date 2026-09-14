@@ -1,4 +1,5 @@
 mod payout;
+mod currency;
 
 use payout::{PaidIn, PayOut, greedy_min_cash_flow};
 use std::collections::HashMap;

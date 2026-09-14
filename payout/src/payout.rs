@@ -1,42 +1,11 @@
 use serde::Serialize;
-use std::{collections::HashMap, ops::Rem};
+use std::{collections::HashMap};
 use tracing::info;
-use std::ops::{Add, Div};
+use crate::currency::Currency;
 
 pub struct PaidIn {
     pub username: String,
     pub amount: f32,
-}
-
-#[derive(Debug, PartialEq)]
-struct Currency(i64);
-
-impl Currency {
-    fn new(value: f32) -> Self {
-        let cents = (value * 100.0).round() as i64;
-        Currency(cents)
-    }
-}
-
-impl Add for Currency {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output {
-        Currency(self.0 + rhs.0)
-    }
-}
-
-impl Div for Currency {
-    type Output = Self;
-    fn div(self, rhs: Self) -> Self::Output {
-        Currency(self.0 / rhs.0)
-    }
-}
-
-impl Rem for Currency {
-    type Output = Self;
-    fn rem(self, rhs: Self) -> Self::Output {
-        Currency(self.0 % rhs.0)
-    }
 }
 
 struct ConvertedPaidIn {
@@ -45,9 +14,9 @@ struct ConvertedPaidIn {
 }
 
 struct NetOwed {
-    fair_share: f32,
-    total_amount: f32,
-    net_paid_in: HashMap<String, f32>,
+    fair_share: Currency,
+    total_amount: Currency,
+    net_paid_in: HashMap<String, Currency>,
 }
 
 #[derive(Serialize)]
@@ -59,17 +28,17 @@ pub struct PayOut {
 
 fn calc_net_owed(paid_in: Vec<ConvertedPaidIn>) -> NetOwed {
     let total_amount: Currency = paid_in.iter().fold(Currency::new(0.0), |acc, x| acc + x.amount);
-    
     let fair_share_base = total_amount / Currency::new(paid_in.len() as f32);
     let fair_share_remainder = total_amount % Currency::new(paid_in.len() as f32);
-    let net_paid_in: HashMap<String, f32> = paid_in
+    let net_paid_in: HashMap<String, Currency> = paid_in
         .iter()
-        .map(|x| (x.username.clone(), x.amount - fair_share))
+        .map(|x| (x.username.clone(), x.amount - fair_share_base))
         .collect();
+    // todo!("add remainder");
 
-    info!("total_amount: {total_amount}; fair_share: {fair_share}");
+    info!("total_amount: {total_amount}; fair_share_base: {fair_share_base}; fair_share_remainder: {fair_share_remainder}");
     NetOwed {
-        fair_share,
+        fair_share: fair_share_base,
         total_amount,
         net_paid_in,
     }
