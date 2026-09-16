@@ -1,0 +1,30 @@
+-- GPUs found on this machine --
+Name:    AMD Radeon RX 7700 XT (RADV NAVI32)
+Backend: Vulkan
+Type:    DiscreteGpu
+Driver:  radv Mesa 26.1.8
+Max texture size:   16384
+Max buffer size:    2147483647
+Max bind groups:    8
+Max vertex attribs: 32
+Max compute groups: 1024
+
+Name:    llvmpipe (LLVM 22.1.8, 256 bits)
+Backend: Vulkan
+Type:    Cpu
+Driver:  llvmpipe Mesa 26.1.8 (LLVM 22.1.8)
+Max texture size:   16384
+Max buffer size:    2147483647
+Max bind groups:    8
+Max vertex attribs: 32
+Max compute groups: 1024
+
+Name:    AMD Radeon RX 7700 XT (radeonsi, navi32, ACO, DRM 3.64, 7.2.5-200.fc44.x86_64)
+Backend: Gl
+Type:    Other
+Driver:   4.6 (Core Profile) Mesa 26.1.8
+Max texture size:   16384
+Max buffer size:    2147483647
+Max bind groups:    8
+Max vertex attribs: 16
+Max compute groups: 1024
