@@ -38,8 +38,7 @@ enum TokenKind {
     RightBrace,
     LeftBrace,
     Comma,
-    Semicolon
-    
+    Semicolon,
 }
 
 #[derive(Debug)]
@@ -48,11 +47,17 @@ struct Token {
     value: Option<String>,
 }
 
+struct TokenConsume {
+    token: Token,
+    size: usize,
+}
+
 fn peek(idx: usize, n: usize, content: &Vec<u8>) -> Option<String> {
     if idx + n > content.len() {
         None
     } else {
-        let x = String::from_utf8(content[idx..n+idx].to_vec()).expect("failed to parse into string");
+        let x =
+            String::from_utf8(content[idx..n + idx].to_vec()).expect("failed to parse into string");
         Some(x)
     }
 }
@@ -61,30 +66,96 @@ fn consume(idx: usize, n: usize) -> usize {
     idx + n
 }
 
-fn keyword_token(token_kind: TokenKind) -> Option<Token> {
+fn keyword_token(token_kind: TokenKind, size: usize) -> Option<TokenConsume> {
     let t = Token {
         token_kind: token_kind,
-        value: None
+        value: None,
     };
-    return Some(t);
+    Some(TokenConsume {
+        token: t,
+        size: size,
+    })
 }
 
-fn find_keyword(idx: usize, content: &Vec<u8>) -> Option<Token>{
-    let keywords = vec!["print", "while"];
-    
+fn keyword_symbol(token_kind: TokenKind) -> Option<Token> {
+    let t = Token {
+        token_kind: token_kind,
+        value: None,
+    };
+    Some(t)
+}
+
+fn find_keyword(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
     if let Some(content) = peek(idx, 5, content) {
         match content.as_str() {
-            "print" => keyword_token(TokenKind::Print),
-            "while" => keyword_token(TokenKind::While),
-            _ => None
+            "print" => keyword_token(TokenKind::Print, 5),
+            "while" => keyword_token(TokenKind::While, 5),
+            _ => None,
         }
-    } else if let Some(content) = peek(idx, 4, content) { // this is OK - we need not return if we dont find a match or return and call the function on 4s etc/
+    } else if let Some(content) = peek(idx, 4, content) {
+        // this is OK - we need not return if we dont find a match or return and call the function on 4s etc/
         match content.as_str() {
-            "else" => keyword_token(TokenKind::Else),
-            _ => None
+            "else" => keyword_token(TokenKind::Else, 4),
+            _ => None,
         }
-    } 
-    else {
+    } else {
+        None
+    }
+}
+
+fn find_symbol(idx: usize, content: &Vec<u8>) -> Option<Token> {
+    let symbol_size = 1;
+    if let Some(content) = peek(idx, symbol_size, content) {
+        match content.as_str() {
+            "(" => keyword_symbol(TokenKind::LeftParen),
+            ")" => keyword_symbol(TokenKind::RightParen),
+            "{" => keyword_symbol(TokenKind::LeftBrace),
+            "}" => keyword_symbol(TokenKind::RightBrace),
+            "+" => keyword_symbol(TokenKind::Add),
+            "-" => keyword_symbol(TokenKind::Subtract),
+            "*" => keyword_symbol(TokenKind::Multiply),
+            "/" => keyword_symbol(TokenKind::Divide),
+            "%" => keyword_symbol(TokenKind::Mod),
+            "," => keyword_symbol(TokenKind::Comma),
+            ";" => keyword_symbol(TokenKind::Semicolon),
+            "=" => keyword_symbol(TokenKind::Assign),
+            "<" => keyword_symbol(TokenKind::Less),
+            ">" => keyword_symbol(TokenKind::Greater),
+            "!" => keyword_symbol(TokenKind::Not),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+fn get_string_literal(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
+    // we assume that we are given the next index
+    let mut end_idx = idx + 1;
+    while let Some(c) = peek(end_idx, 1, content) {
+        if c == "\"" {
+            let s: String = str::from_utf8(&content[idx..end_idx]).unwrap().to_string();
+            let t = Token {
+                token_kind: TokenKind::String,
+                value: Some(s)
+            };
+            return Some(TokenConsume {
+                token: t,
+                size: end_idx - idx + 1,
+            });
+        }
+        end_idx += 1;
+    }
+    unreachable!("could not find end of string")
+}
+
+fn find_literal(idx: usize, content_str: &Vec<u8>) -> Option<TokenConsume> {
+    if let Some(content) = peek(idx, 1, content_str) {
+        match content.as_str() {
+            "\"" => get_string_literal(idx, content_str),
+            _ => None,
+        }
+    } else {
         None
     }
 }
@@ -96,18 +167,27 @@ fn main() -> ExitCode {
         eprintln!("ERROR: file content not ascii");
         return ExitCode::FAILURE;
     }
+    println!("Content: {content}\n");
 
     let chars = content.into_bytes();
     let mut pos = 0;
     while pos < chars.len() {
-        if let Some(p) = find_keyword(pos, &chars){
-            println!("{:?}", p);
-            pos = consume(pos, 5);
+        // todo: consume whitespace
+        if let Some(keyword) = find_keyword(pos, &chars) {
+            let t = keyword.token;
+            println!("token:   {t:?}; position: {pos}");
+            pos = consume(pos, keyword.size);
+        } else if let Some(symbol) = find_symbol(pos, &chars) {
+            println!("symbol:  {symbol:?}; position: {pos}");
+            pos = consume(pos, 1);
+        } else if let Some(literal) = find_literal(pos, &chars) {
+            let t = literal.token;
+            println!("literal: {t:?}; position: {pos}");
+            pos = consume(pos, literal.size);
         }
-        
-        pos +=1;
+        else {
+            pos +=1;
+        }
     }
-    
     ExitCode::SUCCESS
 }
-
