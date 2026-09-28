@@ -52,7 +52,7 @@ struct TokenConsume {
     size: usize,
 }
 
-fn peek(idx: usize, n: usize, content: &Vec<u8>) -> Option<String> {
+fn peek(idx: usize, n: usize, content: &[u8]) -> Option<String> {
     if idx + n > content.len() {
         None
     } else {
@@ -64,6 +64,34 @@ fn peek(idx: usize, n: usize, content: &Vec<u8>) -> Option<String> {
 
 fn consume(idx: usize, n: usize) -> usize {
     idx + n
+}
+
+fn consume_whitespace(idx: usize, content: &Vec<u8>) -> bool {
+    let content = peek(idx, 1, content).unwrap_or("".to_string());
+    if matches!(content.as_str(), " " | "\n" | "\t" | "\r") {
+        true
+    } else {
+        false
+    }
+}
+
+fn track_comment(idx: usize, content: &[u8]) -> Option<usize> {
+    let mut m_idx = idx;
+    
+    while let Some(content) = peek(m_idx, 2, content) {
+        match content.as_str() {
+            "*/" => return Some(m_idx - idx + 2),
+            _ => m_idx += 1,
+        }
+    }
+    None
+}
+
+fn consume_comment(idx: usize, content: &[u8]) -> Option<usize> {
+    match peek(idx, 2, content)?.as_str() {
+        "/*" => track_comment(idx, content),
+        _ => None,
+    }
 }
 
 fn keyword_token(token_kind: TokenKind, size: usize) -> Option<TokenConsume> {
@@ -85,7 +113,7 @@ fn keyword_symbol(token_kind: TokenKind) -> Option<Token> {
     Some(t)
 }
 
-fn find_keyword(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
+fn find_keyword(idx: usize, content: &[u8]) -> Option<TokenConsume> {
     if let Some(content) = peek(idx, 5, content) {
         match content.as_str() {
             "print" => keyword_token(TokenKind::Print, 5),
@@ -103,7 +131,7 @@ fn find_keyword(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
     }
 }
 
-fn find_symbol(idx: usize, content: &Vec<u8>) -> Option<Token> {
+fn find_symbol(idx: usize, content: &[u8]) -> Option<Token> {
     let symbol_size = 1;
     if let Some(content) = peek(idx, symbol_size, content) {
         match content.as_str() {
@@ -129,7 +157,7 @@ fn find_symbol(idx: usize, content: &Vec<u8>) -> Option<Token> {
     }
 }
 
-fn get_string_literal(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
+fn get_string_literal(idx: usize, content: &[u8]) -> Option<TokenConsume> {
     // we assume that we are given the next index
     let mut end_idx = idx + 1;
     while let Some(c) = peek(end_idx, 1, content) {
@@ -137,7 +165,7 @@ fn get_string_literal(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
             let s: String = str::from_utf8(&content[idx..end_idx]).unwrap().to_string();
             let t = Token {
                 token_kind: TokenKind::String,
-                value: Some(s)
+                value: Some(s),
             };
             return Some(TokenConsume {
                 token: t,
@@ -149,19 +177,15 @@ fn get_string_literal(idx: usize, content: &Vec<u8>) -> Option<TokenConsume> {
     unreachable!("could not find end of string")
 }
 
-fn find_literal(idx: usize, content_str: &Vec<u8>) -> Option<TokenConsume> {
-    if let Some(content) = peek(idx, 1, content_str) {
-        match content.as_str() {
-            "\"" => get_string_literal(idx, content_str),
-            _ => None,
-        }
-    } else {
-        None
+fn find_literal(idx: usize, content_str: &[u8]) -> Option<TokenConsume> {
+    match peek(idx, 1, content_str)?.as_str() {
+        "\"" => get_string_literal(idx, content_str),
+        _ => None,
     }
 }
 
 fn main() -> ExitCode {
-    let file_path = "tests/basic_hello_world.txt";
+    let file_path = "tests/complex_print.txt";
     let content = fs::read_to_string(file_path).expect("failed to read file");
     if !content.is_ascii() {
         eprintln!("ERROR: file content not ascii");
@@ -172,8 +196,12 @@ fn main() -> ExitCode {
     let chars = content.into_bytes();
     let mut pos = 0;
     while pos < chars.len() {
-        // todo: consume whitespace
-        if let Some(keyword) = find_keyword(pos, &chars) {
+        // todo: consume comments
+        if consume_whitespace(pos, &chars) {
+            pos += 1;
+        } else if let Some(whitespace) = consume_comment(pos, &chars) {
+            pos += whitespace;
+        } else if let Some(keyword) = find_keyword(pos, &chars) {
             let t = keyword.token;
             println!("token:   {t:?}; position: {pos}");
             pos = consume(pos, keyword.size);
@@ -184,9 +212,8 @@ fn main() -> ExitCode {
             let t = literal.token;
             println!("literal: {t:?}; position: {pos}");
             pos = consume(pos, literal.size);
-        }
-        else {
-            pos +=1;
+        } else {
+            unreachable!("could not tokenize");
         }
     }
     ExitCode::SUCCESS
