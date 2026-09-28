@@ -21,15 +21,15 @@ struct NetOwed {
 
 #[derive(Serialize)]
 pub struct PayOut {
-    pub fair_share: f32,
-    pub total_amount: f32,
+    pub fair_share: String,
+    pub total_amount: String,
     pub transactions: Vec<String>,
 }
 
 fn calc_net_owed(paid_in: Vec<ConvertedPaidIn>) -> NetOwed {
     let total_amount: Currency = paid_in.iter().fold(Currency::new(0.0), |acc, x| acc + x.amount);
-    let fair_share_base = total_amount / Currency::new(paid_in.len() as f32);
-    let fair_share_remainder = total_amount % Currency::new(paid_in.len() as f32);
+    let fair_share_base = total_amount / paid_in.len() as i64;
+    let fair_share_remainder = total_amount % paid_in.len() as i64;
     let net_paid_in: HashMap<String, Currency> = paid_in
         .iter()
         .map(|x| (x.username.clone(), x.amount - fair_share_base))
@@ -47,26 +47,23 @@ fn calc_net_owed(paid_in: Vec<ConvertedPaidIn>) -> NetOwed {
 pub fn greedy_min_cash_flow(paid_in: Vec<PaidIn>) -> PayOut {
     let converted: Vec<ConvertedPaidIn> = paid_in.iter().map(|x| ConvertedPaidIn{username: x.username.clone(), amount: Currency::new(x.amount)}).collect();
     let net_owed = calc_net_owed(converted);
-    let mut debtors: Vec<(String, f32)> = net_owed
+    let mut debtors: Vec<(String, Currency)> = net_owed
         .net_paid_in
         .iter()
-        .filter(|&(_, &net_amount)| net_amount < 0.0)
+        .filter(|&(_, &net_amount)| net_amount < Currency::zero())
         .map(|(name, &net_amount)| (name.clone(), -net_amount))
         .collect();
 
     debtors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    let mut creditors: Vec<(String, f32)> = net_owed
+    let mut creditors: Vec<(String, Currency)> = net_owed
         .net_paid_in
         .iter()
-        .filter(|&(_, &net_amount)| net_amount > 0.0)
+        .filter(|&(_, &net_amount)| net_amount > Currency::zero())
         .map(|(name, &net_amount)| (name.clone(), net_amount))
         .collect();
 
     creditors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    debtors.retain(|x| x.1 > 0.01);
-    creditors.retain(|x| x.1 > 0.01);
 
     let mut transactions: Vec<String> = Vec::new();
 
@@ -84,16 +81,16 @@ pub fn greedy_min_cash_flow(paid_in: Vec<PaidIn>) -> PayOut {
         creditors[0].1 -= debtor_pays;
         debtors[0].1 -= debtor_pays;
 
-        debtors.retain(|x| x.1 > 0.01);
-        creditors.retain(|x| x.1 > 0.01);
-
         debtors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         creditors.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        debtors.retain(|x| x.1 > Currency::zero());
+        creditors.retain(|x| x.1 > Currency::zero());
     }
     info!("transactions: {transactions:?}");
     PayOut {
-        fair_share: net_owed.fair_share,
-        total_amount: net_owed.total_amount,
+        fair_share: net_owed.fair_share.to_string(),
+        total_amount: net_owed.total_amount.to_string(),
         transactions,
     }
 }
